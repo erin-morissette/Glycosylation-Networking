@@ -1,0 +1,220 @@
+% % Net_Grab_Real_Data
+
+% Grab Real Data
+%Import IDs under Real_Struc 
+%Import the intensity or relative abundance under Real_Int
+
+N_Real = length(Real_Int);
+Org_Int = zeros(ngi,1);
+N_occ = zeros(1,1);
+N_entryx_ID = length(entryx_ID);
+str_entryx_ID = strings(N_entryx_ID,1);
+Str_count = 0;
+
+
+for i = 1:N_entryx_ID 
+    str_entryx_ID(i) = num2str(entryx_ID(i));
+end 
+
+Join_ID = strjoin(str_entryx_ID);
+
+for i = 1:ngi
+    Str_count = count(Join_ID,str_entryx_ID(i))
+    for j = 1:N_Real 
+    if strcmp(Real_Struc(j),str_entryx_ID(i)) == 1 && isequal(Str_count,1) == 1 
+        Org_Int(i) = Real_Int(j)
+    elseif strcmp(Real_Struc(j),str_entryx_ID(i)) == 1  && Str_count > 1 == 1 
+        for k = 1:ngi
+            if strcmp(str_entryx_ID(i),str_entryx_ID(k))
+               N_occ = count(Join_ID,str_entryx_ID(i));
+               Org_Int(i)= Real_Int(j)/N_occ
+            end
+        end
+    end
+    end
+end
+
+for i = 1:ngi
+    if Org_Int(i) == 0
+        Org_Int(i) = .001
+    end
+end
+
+
+% % Net_Plot_Graph
+
+%Plot Signal Flow Graph Real
+figure
+Graph_Org = digraph(Dia_Con);
+% Graph_Org.Nodes.Name = entryx_ID
+
+p = plot(Graph_Org,'Layout','layered')
+Grad_Org = (Dia_Con')*Org_Int
+Div_Org = Dia_Con*Grad_Org
+Laplacian = Dia_Con*(Dia_Con')
+L_weight = Laplacian*Org_Int
+L_max = max(L_weight)
+Int_Max = max(Org_Int)
+
+Graph_Org.Nodes.Size = L_weight;
+% Graph_Org.Nodes.Name = {str_entryx_ID};
+Graph_Org.Nodes
+
+Graph_Org.Nodes.NodeColors = L_weight;
+p.NodeCData = Graph_Org.Nodes.NodeColors;
+colorbar
+title('HMC3 Control (Laplacian)')
+% 
+% plot(Graph_Org,'Layout','force')
+
+figure
+p = plot(Graph_Org,'Layout','layered')
+Grad_Org = (Dia_Con')*Org_Int
+Div_Org = Dia_Con*Grad_Org
+Laplacian = Dia_Con*(Dia_Con')
+L_weight = Laplacian*Org_Int
+L_max = max(L_weight)
+Int_Max = max(Org_Int)
+
+Graph_Org.Nodes.Size = Org_Int;
+% Graph_Org.Nodes.Name = Real;
+
+
+Graph_Org.Nodes.NodeColors = Org_Int;
+p.NodeCData = Graph_Org.Nodes.NodeColors;
+colorbar
+title('HMC3 Control (Intensity)')
+
+
+% % Net_Enz_Activity
+
+% Calculate Relative Enzyme Activity
+Path = [];
+Enz_score = zeros(length(enz_names),1);
+for i = 1:length(entryx)
+
+    %Don't forget init
+Path = shortestpath(Graph_Org,60,entryx(i));
+
+    for j = 1:length(Path)
+        for k = 1:length(reac_array) 
+            if isequal(Path(:,j),reac_array(k,2)) == 1
+               Enz_score(reac_array(k,3)) = Enz_score(reac_array(k,3)) + (Org_Int(i)./(max(Org_Int)))*10;
+            end
+        end
+    end
+end
+
+
+Rel_Enz_Activity = [string(enz_names.list),Enz_score]
+
+bar(categorical(string(enz_names.list)),Enz_score,'blue')
+title('Relative Enzyme Activity (TIB-190 Control)')
+xlabel('Enzyme')
+ylabel('Relative Enzyme Activity')
+
+% % Net_Modify
+
+%313211332251 513355452351 1131444215424445
+%1242243444 4233535444 2532423132 335423215124 513355452351(34) 454354'41 13425251 4443 23115251 31321133225134 4443 113341 443251 335125 151113545134 124324 443251 114142113151333145 231144244235 
+Mod_Enz = [1 Enz_score(1); 2 Enz_score(2);3 Enz_score(3); 4 Enz_score(4);5 Enz_score(5); 6 Enz_score(6);7 Enz_score(7); 8 Enz_score(8);9 Enz_score(9);10 Enz_score(10)];
+
+N_Mod = length(Mod_Enz(:,1))
+N_entryx = length(entryx)
+
+reac_num = 0;
+prod_num = 0;
+
+Mod_Dia_Con= Dia_Con;
+
+for i = 1:N_Mod
+    for j = 1:rxi
+        
+        if isequal(Mod_Enz(i,1),reac_array(j,3)) == 1
+           for k = 1:N_entryx
+            if isequal(reac_array(j,1),entryx(k)) == 1
+                reac_num = k
+            
+                for a = 1:N_entryx
+                if isequal(reac_array(j,2),entryx(a)) == 1
+                    prod_num = a 
+                
+                end
+                end
+                Mod_Dia_Con(reac_num,prod_num) = Mod_Enz(i,2)
+            end
+           end
+        end
+    end
+end
+
+disp("τὰ πάντα ῥεῖ καὶ οὐδὲν μένει")
+
+
+% % Net_Markov
+
+% Make a Markov Simulation 
+P = Mod_Dia_Con;
+mc = dtmc(P);
+mc.StateNames = entryx_ID
+figure;
+
+G = digraph(mc.P)
+p = plot(G,'Layout','layered')
+G.Edges.EdgeColors = G.Edges.Weight;
+p.EdgeCData = G.Edges.EdgeColors;
+colorbar
+
+p.NodeLabel = entryx_ID
+p.NodeFontSize = 5
+
+figure
+First_Sim_Graph = graphplot(mc,'ColorEdges',true);
+First_Sim_Graph.MarkerSize = 2
+First_Sim_Graph.NodeColor = [0 0 1]
+
+steps = 19
+
+x0 = zeros(1,248)
+%init
+x0(60) = 10; 
+X = simulate(mc,steps,'X0',x0);
+
+% figure
+% simplot(mc,X,'Type','Graph','FrameRate',1)
+
+figure
+Sim_Object = simplot(mc,X)
+
+Shannon = wentropy((mc.P),'shannon') 
+
+Shan_Step = {};
+
+for i = 2:length(X(:,1))
+    for j = 1:length(X(1,:))
+        for k = 1:length(entryx)
+            if isequal(X(i,j),entryx(k)) == 1
+                Shan_Step{i,j} = mc.P(:,k)
+            end
+        end
+    end
+end
+
+Entropy_Step = [];
+Step = {};
+Step_Mat = {};
+
+for i = 1:length(X(:,1))
+    Step{i} = Shan_Step{i,:}
+
+     Step_Mat{i} = horzcat(Step{:})
+ Entropy_Step(i) = wentropy(Step_Mat{i},'shannon') 
+end
+
+figure
+bar(categorical(0:steps),Entropy_Step)
+fprintf('Shannon Entropy is %f \r\n',Shannon);
+
+%fid = fopen('Shannon_Entropy_for_Cell_Samples.txt','wt');
+%fprintf(fid,'%f',Shannon)
+%fprintf(fid,'%f',Rel_Enz_Activity)
